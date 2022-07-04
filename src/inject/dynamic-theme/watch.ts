@@ -68,7 +68,7 @@ async function customElementsWhenDefined(tag: string) {
         // `customElements.whenDefined` is not available in extensions
         // https://bugs.chromium.org/p/chromium/issues/detail?id=390807
         if (window.customElements && typeof customElements.whenDefined === 'function') {
-            customElements.whenDefined(tag).then(resolve);
+            customElements.whenDefined(tag).then(() => resolve());
         } else if (canOptimizeUsingProxy) {
             resolvers.set(tag, resolve);
             document.dispatchEvent(new CustomEvent('__darkreader__addUndefinedResolver', {detail: {tag}}));
@@ -83,6 +83,7 @@ async function customElementsWhenDefined(tag: string) {
                     }
                 }
             };
+
             requestAnimationFrame(checkIfDefined);
         }
     });
@@ -218,7 +219,7 @@ export function watchForStyleChanges(currentStyles: StyleElement[], update: (sty
             onHugeMutations: handleHugeTreeMutations,
         });
         const attrObserver = new MutationObserver(handleAttributeMutations);
-        attrObserver.observe(root, {attributes: true, attributeFilter: ['rel', 'disabled', 'media'], subtree: true});
+        attrObserver.observe(root, {attributes: true, attributeFilter: ['rel', 'disabled', 'media', 'href'], subtree: true});
         observers.push(treeObserver, attrObserver);
         observedRoots.add(root);
     }

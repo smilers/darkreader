@@ -1,5 +1,6 @@
 import {getSVGFilterMatrixValue} from '../../generators/svg-filter';
 import {bgFetch} from './network';
+import {getSRGBLightness} from '../../utils/color';
 import {loadAsDataURL} from '../../utils/network';
 import type {FilterConfig} from '../../definitions';
 import {logInfo, logWarn} from '../../utils/log';
@@ -20,24 +21,33 @@ export interface ImageDetails {
 const imageManager = new AsyncQueue();
 
 export async function getImageDetails(url: string) {
-    return new Promise<ImageDetails>(async (resolve) => {
+    return new Promise<ImageDetails>(async (resolve, reject) => {
         let dataURL: string;
         if (url.startsWith('data:')) {
             dataURL = url;
         } else {
-            dataURL = await getImageDataURL(url);
+            try {
+                dataURL = await getImageDataURL(url);
+            } catch (error) {
+                reject(error);
+                return;
+            }
         }
 
-        const image = await urlToImage(dataURL);
-        imageManager.addToQueue(() => {
-            resolve({
-                src: url,
-                dataURL,
-                width: image.naturalWidth,
-                height: image.naturalHeight,
-                ...analyzeImage(image),
+        try {
+            const image = await urlToImage(dataURL);
+            imageManager.addToQueue(() => {
+                resolve({
+                    src: url,
+                    dataURL,
+                    width: image.naturalWidth,
+                    height: image.naturalHeight,
+                    ...analyzeImage(image),
+                });
             });
-        });
+        } catch (error) {
+            reject(error);
+        }
     });
 }
 
@@ -131,17 +141,15 @@ function analyzeImage(image: HTMLImageElement) {
     for (y = 0; y < height; y++) {
         for (x = 0; x < width; x++) {
             i = 4 * (y * width + x);
-            r = d[i + 0] / 255;
-            g = d[i + 1] / 255;
-            b = d[i + 2] / 255;
-            a = d[i + 3] / 255;
+            r = d[i + 0];
+            g = d[i + 1];
+            b = d[i + 2];
+            a = d[i + 3];
 
-            if (a < TRANSPARENT_ALPHA_THRESHOLD) {
+            if (a / 255 < TRANSPARENT_ALPHA_THRESHOLD) {
                 transparentPixelsCount++;
             } else {
-                // Use sRGB to determine the `pixel Lightness`
-                // https://en.wikipedia.org/wiki/Relative_luminance
-                l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                l = getSRGBLightness(r, g, b);
                 if (l < DARK_LIGHTNESS_THRESHOLD) {
                     darkPixelsCount++;
                 }
@@ -168,7 +176,6 @@ function analyzeImage(image: HTMLImageElement) {
         isTooLarge: false,
     };
 }
-
 
 export function getFilteredImageDataURL({dataURL, width, height}: ImageDetails, theme: FilterConfig): string {
     const matrix = getSVGFilterMatrixValue(theme);

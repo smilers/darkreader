@@ -84,7 +84,7 @@ export function watchForNodePosition<T extends Node>(
     }
     let attempts = 0;
     let start: number = null;
-    let timeoutId: number = null;
+    let timeoutId: ReturnType<typeof setTimeout> = null;
     const restore = throttle(() => {
         if (timeoutId) {
             return;
@@ -144,19 +144,23 @@ export function watchForNodePosition<T extends Node>(
     const run = () => {
         observer.observe(parent, {childList: true});
     };
+
     const stop = () => {
         clearTimeout(timeoutId);
         observer.disconnect();
         restore.cancel();
     };
+
     const skip = () => {
         observer.takeRecords();
     };
+
     const updateParent = (parentNode: Node & ParentNode) => {
         parent = parentNode;
         stop();
         run();
     };
+
     run();
     return {run, stop, skip};
 }
@@ -179,19 +183,27 @@ export function iterateShadowHosts(root: Node, iterator: (host: Element) => void
         node != null;
         node = walker.nextNode() as Element
     ) {
+        if (node.classList.contains('surfingkeys_hints_host')) {
+            continue;
+        }
+
         iterator(node);
         iterateShadowHosts(node.shadowRoot, iterator);
     }
 }
 
-export function isDOMReady() {
+export let isDOMReady = () => {
     return document.readyState === 'complete' || document.readyState === 'interactive';
+};
+
+export function setIsDOMReady(newFunc: () => boolean) {
+    isDOMReady = newFunc;
 }
 
 const readyStateListeners = new Set<() => void>();
 
 export function addDOMReadyListener(listener: () => void) {
-    readyStateListeners.add(listener);
+    isDOMReady() ? listener() : readyStateListeners.add(listener);
 }
 
 export function removeDOMReadyListener(listener: () => void) {
@@ -207,7 +219,7 @@ export function isReadyStateComplete() {
 const readyStateCompleteListeners = new Set<() => void>();
 
 export function addReadyStateCompleteListener(listener: () => void) {
-    readyStateCompleteListeners.add(listener);
+    isReadyStateComplete() ? listener() : readyStateCompleteListeners.add(listener);
 }
 
 export function cleanReadyStateCompleteListeners() {
@@ -226,6 +238,7 @@ if (!isDOMReady()) {
             }
         }
     };
+
     document.addEventListener('readystatechange', onReadyStateChange);
 }
 
@@ -267,13 +280,13 @@ function getElementsTreeOperations(mutations: MutationRecord[]): ElementsTreeOpe
             if (n instanceof Element) {
                 if (n.isConnected) {
                     moves.add(n);
+                    additions.delete(n);
                 } else {
                     deletions.add(n);
                 }
             }
         });
     });
-    moves.forEach((n) => additions.delete(n));
 
     const duplicateAdditions = [] as Element[];
     const duplicateDeletions = [] as Element[];

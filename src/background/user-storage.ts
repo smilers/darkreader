@@ -2,26 +2,19 @@ import {DEFAULT_SETTINGS, DEFAULT_THEME} from '../defaults';
 import {debounce} from '../utils/debounce';
 import {isURLMatched} from '../utils/url';
 import type {UserSettings} from '../definitions';
-import {readSyncStorage, readLocalStorage, writeSyncStorage, writeLocalStorage, subscribeToOuterSettingsChange} from './utils/extension-api';
+import {readSyncStorage, readLocalStorage, writeSyncStorage, writeLocalStorage} from './utils/extension-api';
 import {logWarn} from '../utils/log';
 import {PromiseBarrier} from '../utils/promise-barrier';
+import {validateSettings} from '../utils/validation';
 
 const SAVE_TIMEOUT = 1000;
 
-interface UserStorageOptions {
-    onRemoteSettingsChange: () => any;
-}
-
 export default class UserStorage {
-    private loadBarrier: PromiseBarrier;
-    private saveStorageBarrier: PromiseBarrier;
+    private loadBarrier: PromiseBarrier<UserSettings, void>;
+    private saveStorageBarrier: PromiseBarrier<void, void>;
 
-    constructor({onRemoteSettingsChange}: UserStorageOptions) {
+    constructor() {
         this.settings = null;
-        subscribeToOuterSettingsChange(async () => {
-            await this.loadSettings();
-            onRemoteSettingsChange();
-        });
     }
 
     settings: Readonly<UserSettings>;
@@ -41,13 +34,15 @@ export default class UserStorage {
         });
     }
 
-    private async loadSettingsFromStorage() {
+    private async loadSettingsFromStorage(): Promise<UserSettings> {
         if (this.loadBarrier) {
             return await this.loadBarrier.entry();
         }
         this.loadBarrier = new PromiseBarrier();
 
         const local = await readLocalStorage(DEFAULT_SETTINGS);
+        const {errors: localCfgErrors} = validateSettings(local);
+        localCfgErrors.forEach((err) => logWarn(err));
         if (local.syncSettings == null) {
             local.syncSettings = DEFAULT_SETTINGS.syncSettings;
         }
@@ -67,11 +62,13 @@ export default class UserStorage {
             return local;
         }
 
-        const sync = await readSyncStorage(DEFAULT_SETTINGS);
-        this.fillDefaults(sync);
+        const {errors: syncCfgErrors} = validateSettings($sync);
+        syncCfgErrors.forEach((err) => logWarn(err));
 
-        this.loadBarrier.resolve(sync);
-        return sync;
+        this.fillDefaults($sync);
+
+        this.loadBarrier.resolve($sync);
+        return $sync;
     }
 
     async saveSettings() {
@@ -118,7 +115,7 @@ export default class UserStorage {
         if ($settings.siteList) {
             if (!Array.isArray($settings.siteList)) {
                 const list: string[] = [];
-                for (const key in ($settings.siteList as any)) {
+                for (const key in ($settings.siteList as string[])) {
                     const index = Number(key);
                     if (!isNaN(index)) {
                         list[index] = $settings.siteList[key];

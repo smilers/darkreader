@@ -34,14 +34,9 @@ export default class IconManager {
         });
     }
 
-    showImportantBadge() {
+    showBadge(text: string) {
         chrome.browserAction.setBadgeBackgroundColor({color: '#e96c4c'});
-        chrome.browserAction.setBadgeText({text: '!'});
-    }
-
-    showUnreadReleaseNotesBadge(count: number) {
-        chrome.browserAction.setBadgeBackgroundColor({color: '#e96c4c'});
-        chrome.browserAction.setBadgeText({text: String(count)});
+        chrome.browserAction.setBadgeText({text});
     }
 
     hideBadge() {

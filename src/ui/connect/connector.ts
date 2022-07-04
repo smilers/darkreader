@@ -1,5 +1,5 @@
 import {isFirefox} from '../../utils/platform';
-import type {ExtensionData, ExtensionActions, FilterConfig, TabInfo, Message, UserSettings} from '../../definitions';
+import type {ExtensionData, ExtensionActions, FilterConfig, Message, UserSettings} from '../../definitions';
 import {MessageType} from '../../utils/message';
 
 export default class Connector implements ExtensionActions {
@@ -9,9 +9,9 @@ export default class Connector implements ExtensionActions {
         this.changeSubscribers = new Set();
     }
 
-    private async sendRequest<T>(type: string, data?: any) {
+    private async sendRequest<T>(type: MessageType, data?: string) {
         return new Promise<T>((resolve, reject) => {
-            chrome.runtime.sendMessage<Message>({type, ...data}, ({data, error}: Message) => {
+            chrome.runtime.sendMessage<Message>({type, data}, ({data, error}: Message) => {
                 if (error) {
                     reject(error);
                 } else {
@@ -21,7 +21,7 @@ export default class Connector implements ExtensionActions {
         });
     }
 
-    private async firefoxSendRequestWithResponse<T>(type: string, data?: any) {
+    private async firefoxSendRequestWithResponse<T>(type: MessageType, data?: string) {
         return new Promise<T>((resolve, reject) => {
             const dataPort = chrome.runtime.connect({name: type});
             dataPort.onDisconnect.addListener(() => reject());
@@ -33,7 +33,7 @@ export default class Connector implements ExtensionActions {
                 }
                 dataPort.disconnect();
             });
-            data && dataPort.postMessage(data);
+            data && dataPort.postMessage({data});
         });
     }
 
@@ -42,13 +42,6 @@ export default class Connector implements ExtensionActions {
             return await this.firefoxSendRequestWithResponse<ExtensionData>(MessageType.UI_GET_DATA);
         }
         return await this.sendRequest<ExtensionData>(MessageType.UI_GET_DATA);
-    }
-
-    async getActiveTabInfo() {
-        if (isFirefox) {
-            return await this.firefoxSendRequestWithResponse<TabInfo>(MessageType.UI_GET_ACTIVE_TAB_INFO);
-        }
-        return await this.sendRequest<TabInfo>(MessageType.UI_GET_ACTIVE_TAB_INFO);
     }
 
     private onChangesReceived = ({type, data}: Message) => {
@@ -77,12 +70,16 @@ export default class Connector implements ExtensionActions {
         chrome.runtime.sendMessage<Message>({type: MessageType.UI_SET_THEME, data: theme});
     }
 
-    toggleURL(url: string) {
-        chrome.runtime.sendMessage<Message>({type: MessageType.UI_TOGGLE_URL, data: url});
+    toggleActiveTab() {
+        chrome.runtime.sendMessage<Message>({type: MessageType.UI_TOGGLE_ACTIVE_TAB, data: {}});
     }
 
     markNewsAsRead(ids: string[]) {
         chrome.runtime.sendMessage<Message>({type: MessageType.UI_MARK_NEWS_AS_READ, data: ids});
+    }
+
+    markNewsAsDisplayed(ids: string[]) {
+        chrome.runtime.sendMessage<Message>({type: MessageType.UI_MARK_NEWS_AS_DISPLAYED, data: ids});
     }
 
     loadConfig(options: {local: boolean}) {
@@ -91,9 +88,9 @@ export default class Connector implements ExtensionActions {
 
     async applyDevDynamicThemeFixes(text: string) {
         if (isFirefox) {
-            return await this.firefoxSendRequestWithResponse<void>(MessageType.UI_APPLY_DEV_DYNAMIC_THEME_FIXES, {data: text});
+            return await this.firefoxSendRequestWithResponse<void>(MessageType.UI_APPLY_DEV_DYNAMIC_THEME_FIXES, text);
         }
-        return await this.sendRequest<void>(MessageType.UI_APPLY_DEV_DYNAMIC_THEME_FIXES, {data: text});
+        return await this.sendRequest<void>(MessageType.UI_APPLY_DEV_DYNAMIC_THEME_FIXES, text);
     }
 
     resetDevDynamicThemeFixes() {
@@ -102,9 +99,9 @@ export default class Connector implements ExtensionActions {
 
     async applyDevInversionFixes(text: string) {
         if (isFirefox) {
-            return await this.firefoxSendRequestWithResponse<void>(MessageType.UI_APPLY_DEV_INVERSION_FIXES, {data: text});
+            return await this.firefoxSendRequestWithResponse<void>(MessageType.UI_APPLY_DEV_INVERSION_FIXES, text);
         }
-        return await this.sendRequest<void>(MessageType.UI_APPLY_DEV_INVERSION_FIXES, {data: text});
+        return await this.sendRequest<void>(MessageType.UI_APPLY_DEV_INVERSION_FIXES, text);
     }
 
     resetDevInversionFixes() {
@@ -113,9 +110,9 @@ export default class Connector implements ExtensionActions {
 
     async applyDevStaticThemes(text: string) {
         if (isFirefox) {
-            return await this.firefoxSendRequestWithResponse<void>(MessageType.UI_APPLY_DEV_STATIC_THEMES, {data: text});
+            return await this.firefoxSendRequestWithResponse<void>(MessageType.UI_APPLY_DEV_STATIC_THEMES, text);
         }
-        return await this.sendRequest<void>(MessageType.UI_APPLY_DEV_STATIC_THEMES, {data: text});
+        return await this.sendRequest<void>(MessageType.UI_APPLY_DEV_STATIC_THEMES, text);
     }
 
     resetDevStaticThemes() {
